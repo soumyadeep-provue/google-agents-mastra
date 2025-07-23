@@ -80,7 +80,8 @@ export function getAuthUrl() {
     scope: [
       "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/documents"
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets"
     ]
   });
 }
@@ -134,7 +135,8 @@ export async function setupGoogleClients() {
   return {
     gmail: google.gmail({ version: "v1", auth: oauth2Client }),
     drive: google.drive({ version: "v3", auth: oauth2Client }),
-    docs: google.docs({ version: "v1", auth: oauth2Client })
+    docs: google.docs({ version: "v1", auth: oauth2Client }),
+    sheets: google.sheets({ version: "v4", auth: oauth2Client })
   };
 }
 

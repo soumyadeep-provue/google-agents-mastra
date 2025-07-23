@@ -6,6 +6,7 @@ import { gmailAgent } from './agents/gmailAgent';
 import { driveAgent } from './agents/driveAgent';
 import { mapsAgent } from './agents/mapsAgent';
 import { docsAgent } from './agents/docsAgent';
+import { sheetsAgent } from './agents/sheetsAgent';
 
 export const mastra = new Mastra({
   agents: { 
@@ -13,6 +14,7 @@ export const mastra = new Mastra({
     driveAgent,
     mapsAgent,
     docsAgent,
+    sheetsAgent,
   },
   storage: new LibSQLStore({
     // stores telemetry, evals, ... into memory storage, if it needs to persist, change to file:../mastra.db
