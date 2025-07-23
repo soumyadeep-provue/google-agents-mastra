@@ -24,7 +24,7 @@ export const getEmailsTool = createTool({
     description: z.string()
   }),
   execute: async (input: any) => {
-    const gmail = setupGmailClient();
+    const gmail = await setupGmailClient();
     if (!gmail) {
       throw new Error("Gmail client not authenticated. Please run loginTool first.");
     }

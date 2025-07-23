@@ -4,6 +4,7 @@ import { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 
 import { loginTool } from "../tools/loginTool";
+import { logoutTool } from "../tools/logoutTool";
 import { sendMessageTool } from "../tools/sendEmailTool";
 import { getEmailsTool } from "../tools/getEmailsTool";
 
@@ -21,9 +22,10 @@ export const gmailAgent = new Agent({
    - Send new emails with to, subject, and body
    - Also handles authentication automatically
 
-3. **Authentication**: 
-   - loginTool available if user specifically needs to authenticate
-   - Usually not needed - other tools handle this automatically
+3. **Authentication Management**: 
+   - loginTool to connect your Gmail account
+   - logoutTool to disconnect and clear stored credentials
+   - Usually authentication is handled automatically by other tools
 
 **SIMPLE WORKFLOW:**
 - User asks for emails → Use getEmailsTool directly
@@ -34,11 +36,11 @@ export const gmailAgent = new Agent({
 - "Show me my latest email" → getEmailsTool with query="latest email"
 - "Find emails from john" → getEmailsTool with query="emails from john"
 - "Unread emails" → getEmailsTool with query="unread emails" 
-- "Emails about meeting" → getEmailsTool with query="emails about meeting"
 - "Send an email to sarah about the project" → sendMessageTool
+- "Log out of Gmail" or "Disconnect my Gmail" → logoutTool
 - Present all email content in clean, readable format with full message body
-- If authentication is needed, guide user naturally through the login process
-- Focus on the user's intent - don't ask about authentication unless tools require it
+- Handle authentication requests naturally (login/logout)
+- Focus on the user's intent and provide clear feedback
 
 Be helpful, natural, and focus on the user's intent rather than technical complexity.`,
 
@@ -46,6 +48,7 @@ Be helpful, natural, and focus on the user's intent rather than technical comple
 
   tools: {
     loginTool,
+    logoutTool,
     getEmailsTool,
     sendMessageTool,
   },

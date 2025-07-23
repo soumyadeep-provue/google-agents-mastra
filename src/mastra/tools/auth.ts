@@ -61,11 +61,46 @@ export async function getTokens(code: string) {
   return tokens;
 }
 
-export function setupGmailClient() {
+export async function setupGmailClient() {
   const tokens = tokenStorage.getTokens();
-  if (tokens) {
-    oauth2Client.setCredentials(tokens);
-    return google.gmail({ version: "v1", auth: oauth2Client });
+  if (!tokens) {
+    return null;
   }
-  return null;
+
+  // Set the tokens on the OAuth2 client
+  oauth2Client.setCredentials(tokens);
+
+  // Check if access token is expired or will expire soon (5 minutes buffer)
+  const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+  const now = Date.now();
+  const expiryTime = tokens.expiry_date || 0;
+
+  if (expiryTime && (now >= expiryTime - bufferTime)) {
+    console.log("Access token expired or expiring soon, refreshing...");
+    
+    try {
+      // Refresh the access token using the refresh token
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      
+      // Update stored tokens with new access token and expiry
+      const updatedTokens = {
+        ...tokens,
+        access_token: credentials.access_token,
+        expiry_date: credentials.expiry_date
+      };
+      
+      // Save the updated tokens
+      tokenStorage.setTokens(updatedTokens);
+      oauth2Client.setCredentials(updatedTokens);
+      
+      console.log("✅ Access token refreshed successfully");
+    } catch (error) {
+      console.error("❌ Failed to refresh access token:", error);
+      // Clear invalid tokens
+      tokenStorage.clearTokens();
+      return null;
+    }
+  }
+
+  return google.gmail({ version: "v1", auth: oauth2Client });
 }
