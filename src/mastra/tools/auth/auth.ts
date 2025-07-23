@@ -1,6 +1,31 @@
 import { google } from "googleapis";
 import dotenv from "dotenv";
-dotenv.config();
+import path from "path";
+
+// Load .env from the project root - try multiple possible locations
+const possibleEnvPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), './.env'),
+  path.resolve('/Users/soumyadeepdas/Desktop/Provue/gmail-agent/gmail/.env')
+];
+
+let envLoaded = false;
+for (const envPath of possibleEnvPaths) {
+  try {
+    const result = dotenv.config({ path: envPath });
+    if (result.parsed) {
+      console.log(`✅ Loaded .env from: ${envPath}`);
+      envLoaded = true;
+      break;
+    }
+  } catch (error) {
+    console.log(`❌ Failed to load .env from: ${envPath}`);
+  }
+}
+
+if (!envLoaded) {
+  console.warn("⚠️ Could not load .env file from any location");
+}
 
 export const oauth2Client = new google.auth.OAuth2(
   process.env.GMAIL_CLIENT_ID,
@@ -52,7 +77,11 @@ export function getAuthUrl() {
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: ["https://www.googleapis.com/auth/gmail.modify"]
+    scope: [
+      "https://www.googleapis.com/auth/gmail.modify",
+      "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/documents"
+    ]
   });
 }
 
@@ -61,7 +90,7 @@ export async function getTokens(code: string) {
   return tokens;
 }
 
-export async function setupGmailClient() {
+export async function setupGoogleClients() {
   const tokens = tokenStorage.getTokens();
   if (!tokens) {
     return null;
@@ -102,5 +131,17 @@ export async function setupGmailClient() {
     }
   }
 
-  return google.gmail({ version: "v1", auth: oauth2Client });
+  return {
+    gmail: google.gmail({ version: "v1", auth: oauth2Client }),
+    drive: google.drive({ version: "v3", auth: oauth2Client }),
+    docs: google.docs({ version: "v1", auth: oauth2Client })
+  };
+}
+
+
+
+// Keep backward compatibility for Gmail tools
+export async function setupGmailClient() {
+  const clients = await setupGoogleClients();
+  return clients?.gmail || null;
 }

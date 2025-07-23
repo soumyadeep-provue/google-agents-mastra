@@ -1,7 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { Buffer } from "buffer";
-import { setupGmailClient } from "./auth";
+import { setupGmailClient } from "../auth/auth";
 
 export const sendMessageTool = createTool({
   id: "sendMessage",
