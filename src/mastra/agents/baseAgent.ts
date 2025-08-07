@@ -89,6 +89,14 @@ Your strength is in orchestrating Google Services to create seamless, profession
     mapsTool,
   },
 
+  defaultGenerateOptions: {
+    maxSteps: 15, // Increased to handle agent activation + tool execution
+  },
+
+  defaultStreamOptions: {
+    maxSteps: 15, // Increased to handle agent activation + tool execution
+  },
+
   memory: new Memory({
     storage: new LibSQLStore({
       url: 'file:../mastra.db',
