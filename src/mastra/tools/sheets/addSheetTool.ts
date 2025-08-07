@@ -7,9 +7,12 @@ export const addSheetTool = createTool({
   description: "Add a new sheet to an existing Google Sheets spreadsheet",
   inputSchema: z.object({
     spreadsheetId: z.string().describe("The ID of the spreadsheet to add a sheet to"),
-    sheetTitle: z.string().describe("Title of the new sheet"),
+    sheetTitle: z.string().optional().describe("Title of the new sheet"),
+    title: z.string().optional().describe("Title of the new sheet (alias for sheetTitle)"),
     rowCount: z.number().optional().describe("Number of rows (default: 1000)"),
     columnCount: z.number().optional().describe("Number of columns (default: 26)")
+  }).refine((data) => data.sheetTitle || data.title, {
+    message: "Either sheetTitle or title must be provided",
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -25,7 +28,7 @@ export const addSheetTool = createTool({
     }
 
     const spreadsheetId = input.context?.spreadsheetId;
-    const sheetTitle = input.context?.sheetTitle;
+    const sheetTitle = input.context?.sheetTitle || input.context?.title;
     const rowCount = input.context?.rowCount || 1000;
     const columnCount = input.context?.columnCount || 26;
     
