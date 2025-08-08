@@ -1,93 +1,190 @@
-import { Agent, Tool } from "@mastra/core";
+import { Agent } from "@mastra/core/agent";
+import { createTool } from "@mastra/core/tools";
 import { openai } from "@ai-sdk/openai";
 import { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
+import { RuntimeContext } from "@mastra/core/runtime-context";
+import { z } from "zod";
 
-import { addAgentTool, removeAgentTool, listActiveAgentsTool } from "../tools/orchestrator/addAgentTool";
-import { getDynamicTools } from "../tools/orchestrator/dynamicToolLoader";
+import { PlanOrchestrator } from "../orchestrator/planOrchestrator";
+import { plannerAgent } from "./plannerAgent";
+import { summarizerAgent } from "./summarizerAgent";
+import { Plan, PlanSchema } from "../orchestrator/schemas";
 
+/**
+ * Enhanced Base Agent - Planner → Orchestrator → Summarizer Pipeline
+ * 
+ * This agent implements the complete plan you specified:
+ * 1. Uses a cheap planner LLM to convert requests to JSON plans
+ * 2. Orchestrates parallel execution with code-first tools + LLM fallbacks
+ * 3. Optionally summarizes results with a final LLM call
+ */
 export const baseAgent = new Agent({
-  name: "Base Agent",
-  instructions: `You are an intelligent orchestrator that dynamically manages agent capabilities based on user requests. Your role is to provide a seamless Google services experience.
+  name: "Enhanced Base Agent",
+  description: "Intelligent orchestrator using planner → orchestrator → summarizer pipeline for Google services",
 
-**PRIMARY WORKFLOW:**
+  instructions: `You are an enhanced Google services orchestrator that handles complex multi-service requests efficiently.
 
-1. **ANALYZE & ACTIVATE** (First Step):
-   - Analyze user request to identify required Google services
-   - IMMEDIATELY call addAgent() for needed capabilities:
-     * "google-gmail" for email operations (send, read, reply, labels)
-     * "google-drive" for file operations (upload, download, share, organize)  
-     * "google-docs" for document creation and editing
-     * "google-sheets" for spreadsheet operations and data management
-     * "google-maps" for location services and navigation
-   - Provide clear reasoning why each agent is needed
+**YOUR NEW ARCHITECTURE:**
 
-2. **EXECUTE WITH DYNAMIC TOOLS** (Second Step):
-   - After activation, you automatically gain access to all tools from active agents
-   - Use the appropriate tools to fulfill the user's request
-   - Tools become available dynamically - no need to mention this to the user
-   - Focus on completing the user's actual task
+1. **PLANNING PHASE**: Convert user requests into structured execution plans
+2. **ORCHESTRATION PHASE**: Execute plans with parallel processing and intelligent fallbacks  
+3. **SUMMARIZATION PHASE**: Present results in natural, conversational format
 
-3. **PRESENT RESULTS** (Final Step):
-   - Provide natural, helpful responses
-   - Don't mention the technical orchestration process
-   - Focus on the user's goal achievement
+**KEY CAPABILITIES:**
+- Handle complex multi-step requests across Google services
+- Execute multiple operations in parallel when possible
+- Automatically fallback to AI assistance when code tools fail
+- Provide comprehensive, user-friendly responses
 
-**KEY BEHAVIORS:**
-- Be proactive: Activate agents immediately when you detect the need
-- Be efficient: Only activate agents that are actually needed
-- Be natural: Hide the complexity from the user
-- Be helpful: Focus on solving the user's problem completely
+**SERVICES AVAILABLE:**
+- Gmail: Send/receive emails, manage labels, handle threads
+- Drive: Upload/download files, manage folders, share documents
+- Docs: Create/edit documents, insert content, manage formatting
+- Sheets: Create/manage spreadsheets, manipulate data, add formulas
+- Maps: Search locations, get directions, find nearby places
+
+**WORKFLOW:**
+1. Analyze user request and create execution plan
+2. Execute plan with parallel processing where possible
+3. Handle authentication automatically when needed
+4. Return honest results - never pretend operations succeeded when they failed
 
 **EXAMPLE INTERACTIONS:**
 
-User: "Send an email to john@company.com about tomorrow's meeting"
-1. addAgent("google-gmail", "Need to send email")
-2. Use sendMessageTool to compose and send the email
-3. Confirm email sent successfully
+User: "Send my latest presentation to john@company.com and create a spreadsheet to track the feedback"
 
-User: "Find my presentation files and share them with the team"
-1. addAgent("google-drive", "Need to find and share files")
-2. Use findFilesTool to locate presentation files  
-3. Use shareFileTool to share with team members
-4. Provide sharing confirmation and links
+Plan Generated:
+- Task 1: Find latest presentation file (Drive)
+- Task 2: Send email with presentation (Gmail) [depends on Task 1]
+- Task 3: Create feedback tracking spreadsheet (Sheets) [parallel with Task 2]
 
-User: "Create a meeting agenda document with today's topics"
-1. addAgent("google-docs", "Need to create document")
-2. Use createDocumentTool to create new document
-3. Use insertTextTool to add agenda content
-4. Share document details and edit link
+Execution: All tasks run efficiently with proper dependency handling
+Result: "✅ Sent 'Q4-Strategy.pptx' to john@company.com and created 'Feedback Tracker' spreadsheet. Both are ready for use!"
 
-**IMPORTANT:**
-- Always activate agents BEFORE trying to use their capabilities
-- Activation happens automatically - don't ask user for permission
-- Present a seamless experience as if all tools were always available
-- Handle authentication requirements gracefully (tools will guide users through OAuth)`,
+**BENEFITS:**
+- Faster execution through parallelization
+- Automatic authentication handling
+- Honest error reporting - never fake success
+- Cost-effective with targeted LLM usage
+
+**CRITICAL RULE:** NEVER claim operations succeeded when they actually failed. Be completely honest about what was accomplished and what failed. If authentication is needed, say so clearly.`,
 
   model: openai("gpt-4o"),
 
-  tools: async ({ runtimeContext }) => {
-    const baseTools = {
-      addAgentTool,
-      removeAgentTool,
-      listActiveAgentsTool,
-    };
-    
-    // Get dynamic tools from currently active agents
-    const dynamicTools = getDynamicTools({ runtimeContext });
-    
-    return {
-        ...baseTools,
-        ...dynamicTools,
-    };
+  tools: {
+    // Core orchestration tool that handles the main execution pipeline
+    executeUserRequest: createTool({
+      id: "executeUserRequest",
+      description: "Execute user requests using the planner → orchestrator → summarizer pipeline",
+      inputSchema: z.object({
+        userRequest: z.string().describe("The user's request to execute"),
+        skipSummary: z.boolean().optional().default(false).describe("Whether to skip the final summarization step")
+      }),
+      execute: async ({ context, runtimeContext }) => {
+        const { userRequest, skipSummary = false } = context;
+
+        console.log(`🚀 Processing user request: "${userRequest}"`);
+
+        try {
+          // Step 1: Generate plan using planner agent
+          console.log("📋 Generating execution plan...");
+          const planResult = await plannerAgent.generate([
+            { role: "user", content: userRequest }
+          ], {
+            output: PlanSchema // Explicitly request structured output
+          });
+
+          if (!planResult.object) {
+            throw new Error("Planner failed to generate a valid plan");
+          }
+
+          const plan = planResult.object as Plan;
+          console.log(`📋 Generated plan with ${plan.length} tasks`);
+
+          // Step 2: Execute plan using orchestrator
+          console.log("⚡ Executing plan...");
+          const orchestrator = new PlanOrchestrator(runtimeContext as RuntimeContext);
+          const executionResult = await orchestrator.executePlan(plan);
+
+          // Step 3: Optional summarization
+          let finalResponse;
+          if (skipSummary || !executionResult.success) {
+            // Return raw results if summary is skipped or execution failed
+            let errorSummary = "Plan execution encountered errors";
+            
+            // Check if this is an authentication error
+            const authErrors = Object.values(executionResult.errors).some(error => 
+              typeof error === 'string' && 
+              (error.includes('Authentication required') || error.includes('not authenticated'))
+            );
+            
+            if (authErrors) {
+              errorSummary = "Authentication required. Please run the login tool first to authenticate with Google services.";
+            }
+            
+            finalResponse = {
+              success: executionResult.success,
+              summary: executionResult.success ? "Plan executed successfully" : errorSummary,
+              results: executionResult.results,
+              errors: executionResult.errors,
+              performance: {
+                executionTime: executionResult.totalExecutionTime
+              }
+            };
+          } else {
+            console.log("📝 Generating user-friendly summary...");
+
+            const summaryPrompt = `Original request: "${userRequest}"
+
+Execution plan: ${JSON.stringify(plan, null, 2)}
+
+Results: ${JSON.stringify({
+              success: executionResult.success,
+              results: executionResult.results,
+              errors: executionResult.errors,
+              executionTime: executionResult.totalExecutionTime
+            }, null, 2)}
+
+Please provide a natural, user-friendly summary of what was accomplished.`;
+
+            const summaryResult = await summarizerAgent.generate([
+              { role: "user", content: summaryPrompt }
+            ]);
+
+            finalResponse = {
+              success: executionResult.success,
+              summary: summaryResult.text,
+              results: executionResult.results,
+              errors: executionResult.errors,
+              performance: {
+                executionTime: executionResult.totalExecutionTime,
+
+              }
+            };
+          }
+
+          console.log(`✅ Request completed in ${executionResult.totalExecutionTime}ms`);
+          return finalResponse;
+
+        } catch (error) {
+          console.error("💥 Request execution failed:", error);
+
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+          return {
+            success: false,
+            summary: `Sorry, I encountered an error while processing your request: ${errorMessage}`,
+            error: errorMessage,
+            results: {},
+            errors: { general: errorMessage }
+          };
+        }
+      }
+    })
   },
 
   defaultGenerateOptions: {
-    maxSteps: 10, // Increased to handle agent activation + tool execution
-  },
-
-  defaultStreamOptions: {
-    maxSteps: 10, // Increased to handle agent activation + tool execution
+    maxSteps: 5, // Reduced since most work is done in the orchestration tool
   },
 
   memory: new Memory({
@@ -98,14 +195,13 @@ User: "Create a meeting agenda document with today's topics"
       lastMessages: 25,
       workingMemory: {
         enabled: true,
-        template: `# Base Agent Session
-- **Active Agents**: [List currently active agent capabilities]
-- **Current Task**: [What the user is trying to accomplish]
-- **Available Tools**: [Tools accessible from active agents]
-- **User Intent**: [Primary goal analysis]
-- **Service Requirements**: [Which Google services are needed]
-- **Authentication Status**: [OAuth status for various services]
-- **Task Progress**: [Current step in multi-step processes]
+        template: `# Enhanced Base Agent Session
+- **Current Request**: [User's current request being processed]
+- **Execution Mode**: [Planner → Orchestrator → Summarizer pipeline]
+- **Services Needed**: [Google services identified for current task]
+- **Plan Status**: [Current execution phase and progress]
+- **Performance**: [Execution times and optimization notes]
+- **Fallbacks Used**: [When AI assistance was needed]
 `
       },
       threads: {
@@ -113,7 +209,4 @@ User: "Create a meeting agenda document with today's topics"
       }
     }
   }),
-}); 
-
-
-
+});
