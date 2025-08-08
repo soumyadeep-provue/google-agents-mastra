@@ -1,5 +1,7 @@
 import { Agent } from "@mastra/core";
 import { openai } from "@ai-sdk/openai";
+import { Memory } from "@mastra/memory";
+import { LibSQLStore } from '@mastra/libsql';
 import { loginTool } from "../tools/auth/loginTool";
 import { logoutTool } from "../tools/auth/logoutTool";
 import { findFilesTool } from "../tools/drive/findFilesTool";
@@ -59,6 +61,16 @@ You have access to individual Google Drive tools:
     uploadFileTool,
     downloadFileTool,
   },
+
+  // Add memory configuration
+  memory: new Memory({
+    storage: new LibSQLStore({
+      url: ":memory:",
+    }),
+    options: {
+      lastMessages: 10,
+    }
+  }),
 
   // Set higher maxSteps for complex file management workflows
   defaultGenerateOptions: {

@@ -1,5 +1,7 @@
 import { Agent } from "@mastra/core";
 import { openai } from "@ai-sdk/openai";
+import { Memory } from "@mastra/memory";
+import { LibSQLStore } from '@mastra/libsql';
 import { loginTool } from "../tools/auth/loginTool";
 import { logoutTool } from "../tools/auth/logoutTool";
 import { getEmailsTool } from "../tools/gmail/getEmailsTool";
@@ -59,6 +61,16 @@ You have access to individual Gmail tools:
     addLabelTool,
     listLabelsTool,
   },
+
+  // Add memory configuration
+  memory: new Memory({
+    storage: new LibSQLStore({
+      url: ":memory:",
+    }),
+    options: {
+      lastMessages: 10,
+    }
+  }),
 
   // Set higher maxSteps for complex Gmail workflows
   defaultGenerateOptions: {

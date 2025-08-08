@@ -1,5 +1,7 @@
 import { Agent } from "@mastra/core";
 import { openai } from "@ai-sdk/openai";
+import { Memory } from "@mastra/memory";
+import { LibSQLStore } from '@mastra/libsql';
 import { loginTool } from "../tools/auth/loginTool";
 import { logoutTool } from "../tools/auth/logoutTool";
 import { createSpreadsheetTool } from "../tools/sheets/createSpreadsheetTool";
@@ -79,6 +81,16 @@ You have access to individual Google Sheets tools:
     batchUpdateValuesTool,
     clearValuesTool,
   },
+
+  // Add memory configuration
+  memory: new Memory({
+    storage: new LibSQLStore({
+      url: ":memory:",
+    }),
+    options: {
+      lastMessages: 10,
+    }
+  }),
 
   // Set higher maxSteps for complex spreadsheet workflows
   defaultGenerateOptions: {

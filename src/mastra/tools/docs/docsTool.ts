@@ -1,308 +1,168 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { createDocumentTool } from "./createDocumentTool";
-import { getDocumentTool } from "./getDocumentTool";
-import { insertTextTool } from "./insertTextTool";
-import { replaceTextTool } from "./replaceTextTool";
-import { deleteContentTool } from "./deleteContentTool";
-import { copyDocumentTool } from "./copyDocumentTool";
-import { searchDocumentsTool } from "./searchDocumentsTool";
-import { insertTableTool } from "./insertTableTool";
 
 export const docsTool = createTool({
   id: "docs",
-  description: `A comprehensive tool for Google Docs operations: create, get, insert text, replace text, delete content, copy, search documents, and insert tables.
+  description: `A natural language Google Docs tool that delegates all operations to a specialized Docs agent. Simply describe what you want to do with Google Docs in plain English.
 
-## AVAILABLE ACTIONS
+## HOW TO USE
 
-### Document Discovery & Management
-- **"search"**: Find documents by name or get all documents
-  - Leave query empty to get all documents
-  - Use specific terms to find documents by name
-  - Set maxResults to limit results (default: 10)
-  - Example: { action: "search", query: "project report", maxResults: 5 }
+Just describe your Google Docs task naturally! The tool accepts natural language requests and handles all the complexity for you.
 
-- **"get"**: Retrieve full document content and metadata
-  - Returns formatted text content and document details
-  - Use before editing to understand current state
-  - Example: { action: "get", documentId: "abc123" }
+### Examples of Requests:
 
-### Document Creation & Duplication
-- **"create"**: Create new Google Docs documents
-  - Provide meaningful titles for better organization
-  - Returns document ID and web view link
-  - Example: { action: "create", title: "Meeting Notes - Jan 2024" }
+**Creating Documents:**
+- "Create a new document called 'Project Proposal 2024'"
+- "Make a new doc for meeting notes"
+- "Create a document titled 'Team Guidelines'"
 
-- **"copy"**: Duplicate existing documents
-  - Perfect for templates or creating similar documents
-  - Optionally provide custom title for the copy
-  - Example: { action: "copy", documentId: "abc123", title: "Q2 Report Copy" }
+**Finding & Reading Documents:**
+- "Find documents about the budget"
+- "Search for docs containing 'quarterly report'"
+- "Get the content of my project planning document"
+- "Show me all my documents"
 
-### Content Editing (Use in Priority Order)
-- **"insert"**: Add new content to documents
-  - If no index specified, automatically appends to end
-  - Use specific index for precise placement
-  - Ideal for adding paragraphs, sections, or any new content
-  - Example: { action: "insert", documentId: "abc123", text: "New section content" }
+**Editing Content:**
+- "Add 'Executive Summary' to the beginning of the document"
+- "Insert a paragraph about the project timeline"
+- "Replace all instances of 'Q3' with 'Q4' in the document"
+- "Delete the section between paragraphs 2 and 4"
 
-- **"replace"**: Find and replace text throughout document
-  - Replaces ALL occurrences of target text
-  - Use matchCase parameter for exact matching when needed
-  - Perfect for bulk text changes, corrections, or updates
-  - Returns count of replacements made
-  - Example: { action: "replace", documentId: "abc123", findText: "Q3 2024", replaceText: "Q4 2024" }
+**Structured Content:**
+- "Add a table with 3 rows and 4 columns to the document"
+- "Insert a 5x3 table for the budget breakdown"
+- "Create a table at the beginning of the document"
 
-- **"delete"**: Remove specific content ranges
-  - Requires precise start and end indices
-  - Use "get" action first to identify exact positions
-  - Be careful - indices shift after edits
-  - Example: { action: "delete", documentId: "abc123", startIndex: 50, endIndex: 100 }
+**Document Management:**
+- "Copy the template document for the new project"
+- "Duplicate the meeting notes template"
+- "Make a copy of the proposal with title 'Proposal v2'"
 
-### Structured Content
-- **"insertTable"**: Add tables to documents
-  - Specify rows and columns count
-  - Use index parameter for precise placement
-  - Defaults to end of document if no index provided
-  - Example: { action: "insertTable", documentId: "abc123", rows: 3, columns: 4 }
+**Complex Operations:**
+- "Create a new project document and add a summary table"
+- "Find the budget document and update all 2023 references to 2024"
+- "Copy the template, rename it to 'New Project Plan', and add an intro paragraph"
 
-## BEST PRACTICES
+## WHAT YOU CAN PROVIDE
 
-### Workflow Recommendations
-1. **Search First**: Always search for documents before asking user for IDs
-2. **Content Review**: Get document content before complex edits
-3. **Appropriate Tools**: Use replace for bulk changes, not delete + insert
-4. **Index Management**: Remember Google Docs uses 0-based indexing
+While the tool works with natural language, you can also provide specific details when available:
 
-### Error Handling
-- Check tool responses for success status
-- Authentication failures require loginTool
-- Provide clear error messages with suggested solutions
+- **Document titles** for creation or searching
+- **Document IDs** when you know them
+- **Specific text content** to insert or replace
+- **Table dimensions** (rows and columns)
+- **Position information** for precise placement
+- **Search queries** for finding documents
 
-### Efficiency Tips
-- Use meaningful document titles for better searchability
-- Batch related operations when possible
-- Cache document IDs during conversation for multiple operations`,
+## INTELLIGENCE FEATURES
+
+The Google Docs specialist agent will:
+- ✅ **Interpret your intent** from natural language
+- ✅ **Find documents** when you describe them
+- ✅ **Ask for missing information** when needed
+- ✅ **Handle authentication** automatically
+- ✅ **Use best practices** for document management
+- ✅ **Provide helpful responses** about what was accomplished
+- ✅ **Handle complex workflows** like multi-step document operations
+- ✅ **Manage document structure** intelligently
+
+## BEST PRACTICES APPLIED
+
+The agent automatically follows best practices:
+- **Smart Document Discovery**: Searches for documents by name when IDs aren't provided
+- **Content-Aware Editing**: Reviews document content before making complex changes
+- **Efficient Operations**: Uses the most appropriate editing method for each task
+- **Error Prevention**: Validates operations and provides clear feedback
+- **Organization**: Uses meaningful titles and maintains document structure
+
+## SECURITY & PRIVACY
+
+- All operations go through Google's secure APIs
+- Authentication is handled safely
+- Your document data remains private and secure
+- Best practices for document sharing and permissions are automatically applied`,
   inputSchema: z.object({
-    action: z.enum(["create", "get", "insert", "replace", "delete", "copy", "search", "insertTable"]).optional().describe("The specific Google Docs action to perform. If unclear or missing, will be handled by Docs specialist agent."),
+    // Natural language request - let the Docs agent interpret the intent
+    request: z.string().describe("Natural language description of what you want to do with Google Docs (e.g., 'Create a document called Meeting Notes', 'Insert a table in my project doc', 'Find documents about budget')"),
     
-    // Create document
-    title: z.string().optional().describe("Title of the document (for create/copy actions)"),
-    
-    // Get/Delete/Insert/Replace/Copy/InsertTable document
-    documentId: z.string().optional().describe("The ID of the document (for get/insert/replace/delete/copy/insertTable actions)"),
-    
-    // Insert text
-    text: z.string().optional().describe("The text to insert (for insert action)"),
-    index: z.number().optional().describe("Position to insert text (for insert action, defaults to end of document)"),
-    
-    // Replace text
-    findText: z.string().optional().describe("The text to find and replace (for replace action)"),
-    replaceText: z.string().optional().describe("The text to replace it with (for replace action)"),
-    matchCase: z.boolean().optional().describe("Whether to match case (for replace action, default: false)"),
-    
-    // Delete content
-    startIndex: z.number().optional().describe("Start position of content to delete (for delete action)"),
-    endIndex: z.number().optional().describe("End position of content to delete (for delete action)"),
-    
-    // Search documents
-    query: z.string().optional().describe("Search query for document names (for search action - leave empty to get all documents)"),
-    maxResults: z.number().optional().describe("Maximum number of results to return (for search action, default: 10)"),
-    
-    // Insert table
-    rows: z.number().optional().describe("Number of rows for the table (for insertTable action)"),
-    columns: z.number().optional().describe("Number of columns for the table (for insertTable action)"),
-    
-    // Fallback context for Docs specialist agent
-    userIntent: z.string().optional().describe("Natural language description of what you want to do with Google Docs (used when action is unclear)")
+    // Optional specific parameters that users can provide
+    title: z.string().optional().describe("Document title for creation or searching"),
+    documentId: z.string().optional().describe("The ID of the document"),
+    text: z.string().optional().describe("Text content to insert or work with"),
+    index: z.number().optional().describe("Position for text insertion or operations"),
+    findText: z.string().optional().describe("Text to find and replace"),
+    replaceText: z.string().optional().describe("Text to replace it with"),
+    matchCase: z.boolean().optional().describe("Whether to match case for replace operations"),
+    startIndex: z.number().optional().describe("Start position for content deletion"),
+    endIndex: z.number().optional().describe("End position for content deletion"),
+    query: z.string().optional().describe("Search query for finding documents"),
+    maxResults: z.number().optional().describe("Maximum number of search results"),
+    rows: z.number().optional().describe("Number of rows for table insertion"),
+    columns: z.number().optional().describe("Number of columns for table insertion")
   }),
   execute: async ({ context, threadId, resourceId, mastra }) => {
-    // Handle cases where action is missing - provide helpful guidance
-    if (!context.action) {
+    console.log("🔄 Docs tool: Delegating all requests directly to Docs specialist agent...");
+    
+    // Ensure we have access to the Mastra instance
+    if (!mastra) {
       return {
         success: false,
-        message: "I can help you with Google Docs tasks! Please specify what you'd like to do. For example:\n- Create a document (provide title)\n- Get document content (provide document ID)\n- Insert text into a document\n- Replace text in a document\n- Search for documents\n- Copy documents\n- Insert tables",
-        availableActions: ["create", "get", "insert", "replace", "delete", "copy", "search", "insertTable"]
+        message: "Google Docs specialist agent is not available. Unable to process Docs requests.",
+        error: "Mastra instance not provided"
       };
     }
 
-    // Validate required fields for each action and provide helpful guidance
-    switch (context.action) {
-      case "create":
-        // Title is optional for create - can create with default title
-        return await createDocumentTool.execute({ 
-          context: { title: context.title } 
-        });
-        
-      case "get":
-        if (!context.documentId) {
-          return {
-            success: false,
-            message: "To get document content, I need:\n- **Document ID**: Which document would you like to retrieve?",
-            required: ["documentId"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await getDocumentTool.execute({ 
-          context: { documentId: context.documentId } 
-        });
-        
-      case "insert":
-        if (!context.documentId || !context.text) {
-          return {
-            success: false,
-            message: "To insert text into a document, I need:\n- **Document ID**: Which document to edit?\n- **Text**: What content would you like to insert?",
-            required: ["documentId", "text"],
-            optional: ["index"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await insertTextTool.execute({ 
-          context: { 
-            documentId: context.documentId, 
-            text: context.text, 
-            index: context.index 
-          } 
-        });
-        
-      case "replace":
-        if (!context.documentId || !context.findText || !context.replaceText) {
-          return {
-            success: false,
-            message: "To replace text in a document, I need:\n- **Document ID**: Which document to edit?\n- **Find Text**: What text to find and replace?\n- **Replace Text**: What text to replace it with?",
-            required: ["documentId", "findText", "replaceText"],
-            optional: ["matchCase"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await replaceTextTool.execute({ 
-          context: { 
-            documentId: context.documentId, 
-            findText: context.findText, 
-            replaceText: context.replaceText, 
-            matchCase: context.matchCase 
-          } 
-        });
-        
-      case "delete":
-        if (!context.documentId || context.startIndex === undefined || context.endIndex === undefined) {
-          return {
-            success: false,
-            message: "To delete content from a document, I need:\n- **Document ID**: Which document to edit?\n- **Start Index**: Where to start deleting?\n- **End Index**: Where to stop deleting?",
-            required: ["documentId", "startIndex", "endIndex"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await deleteContentTool.execute({ 
-          context: { 
-            documentId: context.documentId, 
-            startIndex: context.startIndex, 
-            endIndex: context.endIndex 
-          } 
-        });
-        
-      case "copy":
-        if (!context.documentId) {
-          return {
-            success: false,
-            message: "To copy a document, I need:\n- **Document ID**: Which document would you like to copy?",
-            required: ["documentId"],
-            optional: ["title"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await copyDocumentTool.execute({ 
-          context: { 
-            documentId: context.documentId, 
-            title: context.title 
-          } 
-        });
-        
-      case "search":
-        // Search doesn't require any fields - can search all documents
-        return await searchDocumentsTool.execute({ 
-          context: { 
-            query: context.query, 
-            maxResults: context.maxResults 
-          } 
-        });
-        
-      case "insertTable":
-        if (!context.documentId || !context.rows || !context.columns) {
-          return {
-            success: false,
-            message: "To insert a table into a document, I need:\n- **Document ID**: Which document to edit?\n- **Rows**: How many rows for the table?\n- **Columns**: How many columns for the table?",
-            required: ["documentId", "rows", "columns"],
-            optional: ["index"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await insertTableTool.execute({ 
-          context: { 
-            documentId: context.documentId, 
-            rows: context.rows, 
-            columns: context.columns, 
-            index: context.index 
-          } 
-        });
-        
-      default:
-        // Fallback to Docs specialist agent for unknown actions
-        console.log(`🔄 Docs action unclear or unknown: "${context.action}". Delegating to Docs specialist agent...`);
-        
-        if (!mastra) {
-          return {
-            success: false,
-            message: `Unknown Google Docs action: "${context.action}". Available actions are:\n- create: Create a new document\n- get: Retrieve document content\n- insert: Add text to a document\n- replace: Find and replace text\n- delete: Remove content from a document\n- copy: Duplicate a document\n- search: Find documents\n- insertTable: Add tables to documents`,
-            availableActions: ["create", "get", "insert", "replace", "delete", "copy", "search", "insertTable"],
-            unknownAction: context.action
-          };
-        }
+    // Get the Docs specialist agent
+    const docsAgent = mastra.getAgent("docsAgent");
+    if (!docsAgent) {
+      return {
+        success: false,
+        message: "Google Docs specialist agent is not available. Please check your configuration.",
+        error: "Docs agent not found in Mastra instance"
+      };
+    }
 
-        const docsAgent = mastra.getAgent("docsAgent");
-        if (!docsAgent) {
-          return {
-            success: false,
-            message: `Unknown Google Docs action: "${context.action}". Available actions are:\n- create: Create a new document\n- get: Retrieve document content\n- insert: Add text to a document\n- replace: Find and replace text\n- delete: Remove content from a document\n- copy: Duplicate a document\n- search: Find documents\n- insertTable: Add tables to documents`,
-            availableActions: ["create", "get", "insert", "replace", "delete", "copy", "search", "insertTable"],
-            unknownAction: context.action
-          };
-        }
+    // Build a comprehensive prompt with the user's request and any provided parameters
+    let prompt = `I need help with a Google Docs task: ${context.request}`;
+    
+    // Add any specific parameters that were provided
+    const providedParams = Object.entries(context)
+      .filter(([key, value]) => key !== 'request' && value !== undefined && value !== null)
+      .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+      .join(", ");
+    
+    if (providedParams) {
+      prompt += `\n\nAdditional context provided: ${providedParams}`;
+    }
+    
+    prompt += `\n\nPlease analyze this request and perform the appropriate Google Docs operation. If you need authentication, use the loginTool first.`;
 
-        // Create a natural language prompt for the Docs specialist
-        const contextDescription = Object.entries(context)
-          .filter(([key, value]) => value !== undefined && value !== null)
-          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-          .join(", ");
+    try {
+      const result = await docsAgent.generate(prompt, {
+        memory: threadId && resourceId ? {
+          thread: threadId,
+          resource: resourceId,
+        } : undefined,
+        maxSteps: 8,
+      });
 
-        const prompt = `I need help with a Google Docs task. Here's the context I received: ${contextDescription}
-
-Please analyze this and perform the appropriate Google Docs operation. If you need authentication, use the loginTool first.`;
-
-        try {
-          const result = await docsAgent.generate(prompt, {
-            memory: threadId && resourceId ? {
-              thread: threadId,
-              resource: resourceId,
-            } : undefined,
-            maxSteps: 8,
-          });
-
-          return {
-            success: true,
-            message: "✅ Google Docs task completed by specialist agent",
-            specialistResponse: result.text,
-            delegatedAction: true,
-            originalContext: context,
-          };
-        } catch (error) {
-          console.error("Docs specialist agent failed:", error);
-          return {
-            success: false,
-            message: `Docs specialist agent failed to process the request. Available actions are:\n- create: Create a new document\n- get: Retrieve document content\n- insert: Add text to a document\n- replace: Find and replace text\n- delete: Remove content from a document\n- copy: Duplicate a document\n- search: Find documents\n- insertTable: Add tables to documents`,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            availableActions: ["create", "get", "insert", "replace", "delete", "copy", "search", "insertTable"]
-          };
-        }
+      return {
+        success: true,
+        message: "✅ Google Docs task completed by specialist agent",
+        agentResponse: result.text,
+        delegatedToAgent: true,
+        userRequest: context.request,
+        providedContext: context,
+      };
+    } catch (error) {
+      console.error("Docs specialist agent failed:", error);
+      return {
+        success: false,
+        message: "Google Docs specialist agent failed to process the request. Please try again or provide more specific details about what you want to do with Google Docs.",
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userRequest: context.request,
+        providedContext: context,
+      };
     }
   }
 });

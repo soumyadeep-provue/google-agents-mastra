@@ -1,270 +1,170 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { findFilesTool } from "./findFilesTool";
-import { createFolderTool } from "./createFolderTool";
-import { shareFileTool } from "./shareFileTool";
-import { moveFileTool } from "./moveFileTool";
-import { uploadFileTool } from "./uploadFileTool";
-import { downloadFileTool } from "./downloadFileTool";
 
 export const driveTool = createTool({
   id: "drive",
-  description: `A comprehensive tool for Google Drive operations: find files, create folders, share files, move files, upload, and download.
+  description: `A natural language Google Drive tool that delegates all operations to a specialized Drive agent. Simply describe what you want to do with Google Drive in plain English.
 
-## AVAILABLE ACTIONS
+## HOW TO USE
 
-### File Discovery & Search
-- **"find"**: Search for files and folders in Google Drive
-  - Leave query empty to get all files
-  - Use specific terms to find files by name
-  - Filter by MIME type (e.g., 'application/pdf', 'image/jpeg')
-  - Set maxResults to limit results (default: 10)
-  - Example: { action: "find", query: "presentation", mimeType: "application/vnd.google-apps.presentation" }
+Just describe your Google Drive task naturally! The tool accepts natural language requests and handles all the complexity for you.
 
-### Folder Management
-- **"createFolder"**: Create new folders for organization
-  - Provide descriptive folder names
-  - Optionally specify parent folder ID
-  - Returns folder ID for further operations
-  - Example: { action: "createFolder", name: "Project Alpha Documents", parentId: "parent_folder_id" }
+### Examples of Requests:
 
-### File Operations
-- **"upload"**: Upload local files to Google Drive
-  - Specify local file path and optional custom name
-  - Optionally place in specific parent folder
-  - Supports all file types
-  - Example: { action: "upload", filePath: "/Users/me/document.pdf", fileName: "Important Document.pdf" }
+**Finding Files & Folders:**
+- "Find all my presentation files"
+- "Search for documents containing 'budget'"
+- "Show me all PDF files in my drive"
+- "Look for the project proposal folder"
 
-- **"download"**: Download files from Google Drive to local storage
-  - Requires file ID and local output path
-  - Preserves original file format when possible
-  - Example: { action: "download", fileId: "abc123", outputPath: "/Users/me/Downloads/file.pdf" }
+**Creating Folders:**
+- "Create a folder called 'Client Documents 2024'"
+- "Make a new folder for project files"
+- "Create a subfolder called 'Images' in my Marketing folder"
 
-- **"move"**: Reorganize files by moving between folders
-  - Specify file ID and destination folder ID
-  - Optionally specify current parent for faster operation
-  - Example: { action: "move", fileId: "abc123", newParentId: "folder456" }
+**File Management:**
+- "Upload the contract.pdf file to my Legal folder"
+- "Move the quarterly report to the Reports folder"
+- "Download my presentation file to the Desktop"
+- "Copy the template document for the new project"
 
-### Sharing & Permissions
-- **"share"**: Grant access to files and folders
-  - Specify email address and permission level
-  - Roles: "reader" (view), "writer" (edit), "commenter" (comment)
-  - Example: { action: "share", fileId: "abc123", email: "colleague@company.com", role: "writer" }
+**Sharing & Collaboration:**
+- "Share the budget spreadsheet with john@company.com with edit access"
+- "Give read access to the project folder to the entire team"
+- "Share my presentation with sarah@client.com as view-only"
 
-## BEST PRACTICES
+**Organization:**
+- "Organize all my photos into a Photos folder"
+- "Move all documents from last month to the Archive folder"
+- "Create a project structure with subfolders for docs, images, and data"
 
-### Organization
-- Use descriptive folder and file names
-- Create logical folder hierarchies
-- Group related files together
+**Complex Operations:**
+- "Find all unorganized files and suggest a folder structure"
+- "Upload my local project files and organize them by type"
+- "Share the entire project folder with the team and set appropriate permissions"
 
-### Security
-- Use appropriate permission levels (reader/writer/commenter)
-- Regularly review sharing permissions
-- Be cautious with sensitive file sharing
+## WHAT YOU CAN PROVIDE
 
-### Efficiency
-- Search before asking users for file IDs
-- Use batch operations when working with multiple files
-- Cache folder IDs for organization workflows`,
+While the tool works with natural language, you can also provide specific details when available:
+
+- **File names or descriptions** for searching
+- **Folder names** for organization
+- **File paths** for uploads and downloads
+- **File/Folder IDs** when you know them
+- **Email addresses** for sharing
+- **Permission levels** (reader, writer, commenter)
+- **MIME types** for specific file filtering
+
+## INTELLIGENCE FEATURES
+
+The Google Drive specialist agent will:
+- ✅ **Interpret your intent** from natural language
+- ✅ **Find files and folders** when you describe them
+- ✅ **Ask for missing information** when needed
+- ✅ **Handle authentication** automatically
+- ✅ **Use best practices** for file organization and sharing
+- ✅ **Provide helpful responses** about what was accomplished
+- ✅ **Handle complex workflows** like multi-step file operations
+- ✅ **Manage permissions** intelligently and securely
+
+## BEST PRACTICES APPLIED
+
+The agent automatically follows best practices:
+- **Smart File Discovery**: Searches for files by name/type when IDs aren't provided
+- **Secure Sharing**: Uses appropriate permission levels for different collaboration needs
+- **Efficient Organization**: Creates logical folder structures and file hierarchies
+- **Error Prevention**: Validates operations and provides clear feedback
+- **Privacy Protection**: Handles sensitive file sharing with appropriate caution
+
+## SECURITY & PRIVACY
+
+- All operations go through Google's secure APIs
+- Authentication is handled safely
+- Your file data remains private and secure
+- Best practices for file sharing and permissions are automatically applied
+- Sensitive operations require explicit confirmation`,
   inputSchema: z.object({
-    action: z.enum(["find", "createFolder", "share", "move", "upload", "download"]).optional().describe("The specific Google Drive action to perform. If unclear or missing, will be handled by Drive specialist agent."),
+    // Natural language request - let the Drive agent interpret the intent
+    request: z.string().describe("Natural language description of what you want to do with Google Drive (e.g., 'Find my presentation files', 'Create a folder for project documents', 'Share the budget with the team')"),
     
-    // Find files
-    query: z.string().optional().describe("Search query for files (for find action - leave empty to get all files)"),
-    maxResults: z.number().optional().describe("Maximum number of results to return (for find action, default: 10)"),
-    mimeType: z.string().optional().describe("Filter by specific MIME type (for find action, e.g., 'application/pdf')"),
-    
-    // Create folder
-    name: z.string().optional().describe("Name of the folder to create (for createFolder action)"),
-    parentId: z.string().optional().describe("ID of parent folder (for createFolder/upload actions, defaults to root)"),
-    
-    // Share file
-    fileId: z.string().optional().describe("ID of the file (for share/move/download actions)"),
-    email: z.string().optional().describe("Email address to share with (for share action)"),
-    role: z.enum(["reader", "writer", "commenter"]).optional().describe("Permission role (for share action, default: reader)"),
-    
-    // Move file
-    newParentId: z.string().optional().describe("ID of the destination folder (for move action)"),
-    oldParentId: z.string().optional().describe("ID of the current parent folder (for move action)"),
-    
-    // Upload file
-    filePath: z.string().optional().describe("Local path to the file to upload (for upload action)"),
-    fileName: z.string().optional().describe("Name for the uploaded file (for upload action)"),
-    
-    // Download file
-    outputPath: z.string().optional().describe("Local path where the file should be saved (for download action)"),
-    
-    // Fallback context for Drive specialist agent
-    userIntent: z.string().optional().describe("Natural language description of what you want to do with Google Drive (used when action is unclear)")
+    // Optional specific parameters that users can provide
+    query: z.string().optional().describe("Search query for finding files"),
+    maxResults: z.number().optional().describe("Maximum number of search results"),
+    mimeType: z.string().optional().describe("Filter by specific MIME type (e.g., 'application/pdf')"),
+    name: z.string().optional().describe("Name for folder creation or file operations"),
+    parentId: z.string().optional().describe("ID of parent folder"),
+    fileId: z.string().optional().describe("ID of the file or folder"),
+    email: z.string().optional().describe("Email address for sharing"),
+    role: z.enum(["reader", "writer", "commenter"]).optional().describe("Permission role for sharing"),
+    newParentId: z.string().optional().describe("ID of the destination folder for moving"),
+    oldParentId: z.string().optional().describe("ID of the current parent folder"),
+    filePath: z.string().optional().describe("Local path to the file for upload"),
+    fileName: z.string().optional().describe("Name for the uploaded file"),
+    outputPath: z.string().optional().describe("Local path where the file should be saved for download")
   }),
   execute: async ({ context, threadId, resourceId, mastra }) => {
-    // Handle cases where action is missing - provide helpful guidance
-    if (!context.action) {
+    console.log("🔄 Drive tool: Delegating all requests directly to Drive specialist agent...");
+    
+    // Ensure we have access to the Mastra instance
+    if (!mastra) {
       return {
         success: false,
-        message: "I can help you with Google Drive tasks! Please specify what you'd like to do. For example:\n- Find files or folders (with optional search terms)\n- Create a new folder (provide folder name)\n- Share files with others (provide file ID and email)\n- Move files between folders\n- Upload local files to Drive\n- Download files to your computer",
-        availableActions: ["find", "createFolder", "share", "move", "upload", "download"]
+        message: "Google Drive specialist agent is not available. Unable to process Drive requests.",
+        error: "Mastra instance not provided"
       };
     }
 
-    // Validate required fields for each action and provide helpful guidance
-    switch (context.action) {
-      case "find":
-        // Find doesn't require any fields - can search all files
-        return await findFilesTool.execute({
-          context: {
-            query: context.query,
-            maxResults: context.maxResults,
-            mimeType: context.mimeType
-          }
-        });
-        
-      case "createFolder":
-        if (!context.name) {
-          return {
-            success: false,
-            message: "To create a folder, I need:\n- **Folder Name**: What would you like to name the folder?",
-            required: ["name"],
-            optional: ["parentId"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await createFolderTool.execute({
-          context: {
-            name: context.name,
-            parentId: context.parentId
-          }
-        });
-        
-      case "share":
-        if (!context.fileId || !context.email) {
-          return {
-            success: false,
-            message: "To share a file, I need:\n- **File ID**: Which file would you like to share?\n- **Email**: Who should receive access to the file?",
-            required: ["fileId", "email"],
-            optional: ["role"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await shareFileTool.execute({
-          context: {
-            fileId: context.fileId,
-            email: context.email,
-            role: context.role
-          }
-        });
-        
-      case "move":
-        if (!context.fileId || !context.newParentId) {
-          return {
-            success: false,
-            message: "To move a file, I need:\n- **File ID**: Which file would you like to move?\n- **New Parent ID**: Which folder should it be moved to?",
-            required: ["fileId", "newParentId"],
-            optional: ["oldParentId"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await moveFileTool.execute({
-          context: {
-            fileId: context.fileId,
-            newParentId: context.newParentId,
-            oldParentId: context.oldParentId
-          }
-        });
-        
-      case "upload":
-        if (!context.filePath) {
-          return {
-            success: false,
-            message: "To upload a file, I need:\n- **File Path**: What is the local path to the file you want to upload?",
-            required: ["filePath"],
-            optional: ["fileName", "parentId"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await uploadFileTool.execute({
-          context: {
-            filePath: context.filePath,
-            fileName: context.fileName,
-            parentId: context.parentId
-          }
-        });
-        
-      case "download":
-        if (!context.fileId || !context.outputPath) {
-          return {
-            success: false,
-            message: "To download a file, I need:\n- **File ID**: Which file would you like to download?\n- **Output Path**: Where should I save the file on your computer?",
-            required: ["fileId", "outputPath"],
-            providedFields: Object.keys(context).filter(key => context[key as keyof typeof context] !== undefined)
-          };
-        }
-        return await downloadFileTool.execute({
-          context: {
-            fileId: context.fileId,
-            outputPath: context.outputPath
-          }
-        });
-        
-      default:
-        // Fallback to Drive specialist agent for unknown actions
-        console.log(`🔄 Drive action unclear or unknown: "${context.action}". Delegating to Drive specialist agent...`);
-        
-        if (!mastra) {
-          return {
-            success: false,
-            message: `Unknown Google Drive action: "${context.action}". Available actions are:\n- find: Search for files and folders\n- createFolder: Create new folders\n- share: Grant access to files/folders\n- move: Move files between folders\n- upload: Upload local files to Drive\n- download: Download files to your computer`,
-            availableActions: ["find", "createFolder", "share", "move", "upload", "download"],
-            unknownAction: context.action
-          };
-        }
+    // Get the Drive specialist agent
+    const driveAgent = mastra.getAgent("driveAgent");
+    if (!driveAgent) {
+      return {
+        success: false,
+        message: "Google Drive specialist agent is not available. Please check your configuration.",
+        error: "Drive agent not found in Mastra instance"
+      };
+    }
 
-        const driveAgent = mastra.getAgent("driveAgent");
-        if (!driveAgent) {
-          return {
-            success: false,
-            message: `Unknown Google Drive action: "${context.action}". Available actions are:\n- find: Search for files and folders\n- createFolder: Create new folders\n- share: Grant access to files/folders\n- move: Move files between folders\n- upload: Upload local files to Drive\n- download: Download files to your computer`,
-            availableActions: ["find", "createFolder", "share", "move", "upload", "download"],
-            unknownAction: context.action
-          };
-        }
+    // Build a comprehensive prompt with the user's request and any provided parameters
+    let prompt = `I need help with a Google Drive task: ${context.request}`;
+    
+    // Add any specific parameters that were provided
+    const providedParams = Object.entries(context)
+      .filter(([key, value]) => key !== 'request' && value !== undefined && value !== null)
+      .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+      .join(", ");
+    
+    if (providedParams) {
+      prompt += `\n\nAdditional context provided: ${providedParams}`;
+    }
+    
+    prompt += `\n\nPlease analyze this request and perform the appropriate Google Drive operation. If you need authentication, use the loginTool first.`;
 
-        // Create a natural language prompt for the Drive specialist
-        const contextDescription = Object.entries(context)
-          .filter(([key, value]) => value !== undefined && value !== null)
-          .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-          .join(", ");
+    try {
+      const result = await driveAgent.generate(prompt, {
+        memory: threadId && resourceId ? {
+          thread: threadId,
+          resource: resourceId,
+        } : undefined,
+        maxSteps: 8,
+      });
 
-        const prompt = `I need help with a Google Drive task. Here's the context I received: ${contextDescription}
-
-Please analyze this and perform the appropriate Google Drive operation. If you need authentication, use the loginTool first.`;
-
-        try {
-          const result = await driveAgent.generate(prompt, {
-            memory: threadId && resourceId ? {
-              thread: threadId,
-              resource: resourceId,
-            } : undefined,
-            maxSteps: 8,
-          });
-
-          return {
-            success: true,
-            message: "✅ Google Drive task completed by specialist agent",
-            specialistResponse: result.text,
-            delegatedAction: true,
-            originalContext: context,
-          };
-        } catch (error) {
-          console.error("Drive specialist agent failed:", error);
-          return {
-            success: false,
-            message: `Drive specialist agent failed to process the request. Available actions are:\n- find: Search for files and folders\n- createFolder: Create new folders\n- share: Grant access to files/folders\n- move: Move files between folders\n- upload: Upload local files to Drive\n- download: Download files to your computer`,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            availableActions: ["find", "createFolder", "share", "move", "upload", "download"]
-          };
-        }
+      return {
+        success: true,
+        message: "✅ Google Drive task completed by specialist agent",
+        agentResponse: result.text,
+        delegatedToAgent: true,
+        userRequest: context.request,
+        providedContext: context,
+      };
+    } catch (error) {
+      console.error("Drive specialist agent failed:", error);
+      return {
+        success: false,
+        message: "Google Drive specialist agent failed to process the request. Please try again or provide more specific details about what you want to do with Google Drive.",
+        error: error instanceof Error ? error.message : 'Unknown error',
+        userRequest: context.request,
+        providedContext: context,
+      };
     }
   }
 }); 

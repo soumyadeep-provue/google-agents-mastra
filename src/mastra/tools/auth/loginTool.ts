@@ -14,9 +14,26 @@ export const loginTool = createTool({
     expiryDate: z.number()
   }),
   execute: async (input: any) => {
+    // Check if we already have valid tokens
+    const existingTokens = tokenStorage.getTokens();
+    if (existingTokens && existingTokens.access_token && existingTokens.refresh_token) {
+      console.log("✅ Already authenticated, using existing tokens");
+      return {
+        accessToken: existingTokens.access_token,
+        refreshToken: existingTokens.refresh_token,
+        expiryDate: existingTokens.expiry_date
+      };
+    }
+
+    console.log("🔐 No existing tokens found, starting OAuth flow...");
     return await new Promise<{ accessToken: string; refreshToken: string; expiryDate: number }>((resolve, reject) => {
       const app = express();
-      const server = app.listen(3000, () => {
+      const server = app.listen(3000, (error?: Error) => {
+        if (error) {
+          console.error("❌ Failed to start auth server (port 3000 may be in use):", error.message);
+          reject(new Error("Authentication server failed to start. Please try again."));
+          return;
+        }
         const url = getAuthUrl();
         console.log("🔐 Opening browser for Gmail login...");
         open(url);
