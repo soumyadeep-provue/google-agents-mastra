@@ -89,6 +89,15 @@ Your strength is in orchestrating Google Services to create seamless, profession
     mapsTool,
   },
 
+  // Set default options to increase maxSteps for complex workflows
+  defaultGenerateOptions: {
+    maxSteps: 100,
+  },
+
+  defaultStreamOptions: {
+    maxSteps: 100,
+  },
+
   memory: new Memory({
     storage: new LibSQLStore({
       url: 'file:../mastra.db',
