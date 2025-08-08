@@ -6,8 +6,11 @@ export const moveFileTool = createTool({
   id: "moveFile",
   description: "Move a file or folder to a different location in Google Drive. You can move to a specific folder or to the root.",
   inputSchema: z.object({
-    fileName: z.string().describe("Name or ID of the file/folder to move"),
-    targetFolder: z.string().optional().describe("Name or ID of destination folder (leave empty to move to root)")
+    fileName: z.string().optional().describe("Name of the file/folder to move"),
+    fileId: z.string().optional().describe("ID of the file/folder to move"),
+    targetFolder: z.string().optional().describe("Name of destination folder (leave empty to move to root)"),
+    newParentId: z.string().optional().describe("ID of destination folder (leave empty to move to root)"),
+    oldParentId: z.string().optional().describe("ID of current parent folder (optional)")
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -23,38 +26,57 @@ export const moveFileTool = createTool({
     }
 
     const fileName = input.context?.fileName;
+    const fileId = input.context?.fileId;
     const targetFolder = input.context?.targetFolder;
+    const newParentId = input.context?.newParentId;
+    const oldParentId = input.context?.oldParentId;
 
-    if (!fileName) {
-      throw new Error("File name is required");
+    // We need either fileName or fileId
+    if (!fileName && !fileId) {
+      throw new Error("Either file name or file ID is required");
     }
 
     try {
-      // Find the file/folder to move
-      const fileSearchResponse = await clients.drive.files.list({
-        q: `name='${fileName}' and trashed=false`,
-        fields: 'files(id, name, parents)'
-      });
+      let file;
+      let fileIdToUse;
 
-      if (!fileSearchResponse.data.files || fileSearchResponse.data.files.length === 0) {
-        return {
-          success: false,
-          fileName,
-          fromLocation: "Unknown",
-          toLocation: targetFolder || "Root",
-          message: `❌ File or folder '${fileName}' not found.`
-        };
+      // If we have fileId, use it directly, otherwise search by name
+      if (fileId) {
+        const fileResponse = await clients.drive.files.get({
+          fileId: fileId,
+          fields: 'id, name, parents'
+        });
+        file = fileResponse.data;
+        fileIdToUse = fileId;
+      } else {
+        // Find the file/folder by name
+        const fileSearchResponse = await clients.drive.files.list({
+          q: `name='${fileName}' and trashed=false`,
+          fields: 'files(id, name, parents)'
+        });
+        
+        if (!fileSearchResponse.data.files || fileSearchResponse.data.files.length === 0) {
+          return {
+            success: false,
+            fileName: fileName || fileId || "Unknown",
+            fromLocation: "Unknown",
+            toLocation: targetFolder || newParentId || "Root",
+            message: `❌ File or folder '${fileName}' not found.`
+          };
+        }
+        
+        file = fileSearchResponse.data.files[0];
+        fileIdToUse = file.id!;
       }
 
-      const file = fileSearchResponse.data.files[0];
-      const fileId = file.id!;
+
       const currentParents = file.parents || [];
 
-      let targetFolderId = null;
+      let targetFolderId = newParentId || null;
       let targetLocationName = "Root";
 
-      // Find target folder if specified
-      if (targetFolder) {
+      // Find target folder if specified (either by name or ID)
+      if (targetFolder && !newParentId) {
         const folderSearchResponse = await clients.drive.files.list({
           q: `name='${targetFolder}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
           fields: 'files(id, name)'
@@ -63,7 +85,7 @@ export const moveFileTool = createTool({
         if (!folderSearchResponse.data.files || folderSearchResponse.data.files.length === 0) {
           return {
             success: false,
-            fileName,
+            fileName: fileName || file.name || "Unknown",
             fromLocation: "Unknown",
             toLocation: targetFolder,
             message: `❌ Target folder '${targetFolder}' not found.`
@@ -72,6 +94,17 @@ export const moveFileTool = createTool({
 
         targetFolderId = folderSearchResponse.data.files[0].id!;
         targetLocationName = folderSearchResponse.data.files[0].name!;
+      } else if (newParentId) {
+        // If we have newParentId, try to get the folder name for better messaging
+        try {
+          const folderResponse = await clients.drive.files.get({
+            fileId: newParentId,
+            fields: 'name'
+          });
+          targetLocationName = folderResponse.data.name || "Unknown Folder";
+        } catch (error) {
+          targetLocationName = "Target Folder";
+        }
       }
 
       // Get current parent folder name for better messaging
@@ -90,7 +123,7 @@ export const moveFileTool = createTool({
 
       // Move the file
       const updateRequest: any = {
-        fileId: fileId,
+        fileId: fileIdToUse,
         addParents: targetFolderId || undefined,
         removeParents: currentParents.join(',') || undefined,
         fields: 'id, parents'
@@ -114,10 +147,10 @@ export const moveFileTool = createTool({
       console.error("File move error:", error);
       return {
         success: false,
-        fileName,
-        fromLocation: "Unknown",
-        toLocation: targetFolder || "Root",
-        message: `❌ Failed to move '${fileName}'. Please try again.`
+        fileName: fileName || fileId || "Unknown",
+        fromLocation: "Unknown", 
+        toLocation: targetFolder || newParentId || "Root",
+        message: `❌ Failed to move '${fileName || fileId}'. Please try again.`
       };
     }
   }

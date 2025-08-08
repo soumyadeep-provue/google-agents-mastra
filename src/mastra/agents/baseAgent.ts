@@ -90,11 +90,11 @@ Your strength is in orchestrating Google Services to create seamless, profession
   },
 
   defaultGenerateOptions: {
-    maxSteps: 100, // Increased to handle agent activation + tool execution
+    maxSteps: 1000, 
   },
 
   defaultStreamOptions: {
-    maxSteps: 100, // Increased to handle agent activation + tool execution
+    maxSteps: 1000, 
   },
 
   memory: new Memory({

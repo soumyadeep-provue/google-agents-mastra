@@ -3,9 +3,11 @@ import { z } from "zod";
 
 export const getCurrentLocationTool = createTool({
   id: "getCurrentLocation",
-  description: "Get the user's current location using GPS coordinates. This enables location-aware searches and recommendations.",
+  description: "Get the user's current location. Since this runs in a server environment, it provides guidance on how to get location information or uses IP-based location detection.",
   inputSchema: z.object({
-    highAccuracy: z.boolean().optional().describe("Request high accuracy GPS (default: true)")
+    highAccuracy: z.boolean().optional().describe("Request high accuracy GPS (default: true)"),
+    ipAddress: z.string().optional().describe("Optional IP address for location detection"),
+    fallbackLocation: z.string().optional().describe("Fallback location if GPS not available (e.g., 'San Francisco, CA')")
   }),
   outputSchema: z.object({
     success: z.boolean(),
@@ -19,59 +21,83 @@ export const getCurrentLocationTool = createTool({
   }),
   execute: async (input: any) => {
     const highAccuracy = input.context?.highAccuracy ?? true;
+    const ipAddress = input.context?.ipAddress;
+    const fallbackLocation = input.context?.fallbackLocation;
 
     try {
-      // Check if geolocation is available
-      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        return {
-          success: false,
-          message: "❌ Geolocation is not available in this environment. Please provide your location manually."
-        };
-      }
-
-      // Get current position
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          reject,
-          {
-            enableHighAccuracy: highAccuracy,
-            timeout: 10000,
-            maximumAge: 300000 // 5 minutes cache
-          }
-        );
-      });
-
-      const { latitude, longitude, accuracy } = position.coords;
-
-      // Optionally reverse geocode to get a readable address
-      let address = undefined;
-      const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+      // Since we're in a server environment, we can't use navigator.geolocation
+      // Instead, we'll provide helpful guidance and try IP-based location if available
       
-      if (apiKey) {
+      let location = null;
+      let message = "";
+
+      // Try IP-based location detection if IP address is provided
+      if (ipAddress) {
         try {
-          const geoResponse = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
-          );
-          const geoData = await geoResponse.json();
+          // Use a free IP geolocation service
+          const ipResponse = await fetch(`http://ip-api.com/json/${ipAddress}`);
+          const ipData = await ipResponse.json();
           
-          if (geoData.status === 'OK' && geoData.results.length > 0) {
-            address = geoData.results[0].formatted_address;
+          if (ipData.status === 'success') {
+            location = {
+              latitude: ipData.lat,
+              longitude: ipData.lon,
+              accuracy: 10000, // IP-based location is less accurate
+              address: `${ipData.city}, ${ipData.regionName}, ${ipData.country}`
+            };
+            message = `✅ Location detected from IP address: ${location.address}`;
           }
         } catch (error) {
-          console.warn("Could not reverse geocode location:", error);
+          console.warn("IP geolocation failed:", error);
         }
+      }
+
+      // If we have a fallback location, geocode it
+      if (!location && fallbackLocation) {
+        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+        if (apiKey) {
+          try {
+            const geoResponse = await fetch(
+              `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fallbackLocation)}&key=${apiKey}`
+            );
+            const geoData = await geoResponse.json();
+            
+            if (geoData.status === 'OK' && geoData.results.length > 0) {
+              const coords = geoData.results[0].geometry.location;
+              location = {
+                latitude: coords.lat,
+                longitude: coords.lng,
+                accuracy: 1000,
+                address: geoData.results[0].formatted_address
+              };
+              message = `✅ Using provided location: ${location.address}`;
+            }
+          } catch (error) {
+            console.warn("Geocoding fallback location failed:", error);
+          }
+        }
+      }
+
+      // If no location detected, provide guidance
+      if (!location) {
+        return {
+          success: false,
+          message: `❌ Current location unavailable in server environment. 
+          
+**To get your location for Maps services:**
+1. Provide your address manually in search queries (e.g., "restaurants near 123 Main St, San Francisco")
+2. Use specific location parameters in other Maps actions
+3. Pass your IP address for approximate location detection
+4. Provide a fallbackLocation parameter (e.g., "San Francisco, CA")
+
+**Alternative approach:** Use other Maps actions with specific locations instead of getCurrentLocation.`
+        };
       }
 
       return {
         success: true,
-        location: {
-          latitude,
-          longitude,
-          accuracy,
-          address
-        },
-        message: `✅ Current location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}${address ? ` (${address})` : ''}`
+        location,
+        message
       };
 
     } catch (error: any) {

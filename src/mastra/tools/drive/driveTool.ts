@@ -119,7 +119,8 @@ export const driveTool = createTool({
           context: {
             fileId: context.fileId,
             email: context.email,
-            role: context.role
+            role: context.role,
+            shareType: "email"
           }
         });
         

@@ -111,6 +111,11 @@ export const mapsTool = createTool({
     latitude: z.number().optional().describe("Latitude coordinate (required for reverseGeocoding action)"),
     longitude: z.number().optional().describe("Longitude coordinate (required for reverseGeocoding action)"),
     
+    // Get current location
+    highAccuracy: z.boolean().optional().describe("Enable high accuracy GPS (optional for getCurrentLocation action)"),
+    ipAddress: z.string().optional().describe("IP address for location detection (optional for getCurrentLocation action)"),
+    fallbackLocation: z.string().optional().describe("Fallback location if GPS not available (optional for getCurrentLocation action)"),
+    
     // Distance matrix
     origins: z.array(z.string()).optional().describe("Array of origin locations (required for distanceMatrix action)"),
     destinations: z.array(z.string()).optional().describe("Array of destination locations (required for distanceMatrix action)")
@@ -172,7 +177,11 @@ export const mapsTool = createTool({
         
       case "getCurrentLocation":
         return await getCurrentLocationTool.execute({
-          context: {}
+          context: {
+            highAccuracy: context.highAccuracy,
+            ipAddress: context.ipAddress,
+            fallbackLocation: context.fallbackLocation
+          }
         });
         
       default:

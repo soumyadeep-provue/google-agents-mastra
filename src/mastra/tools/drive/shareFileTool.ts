@@ -6,9 +6,12 @@ export const shareFileTool = createTool({
   id: "shareFile",
   description: "Share a file or folder in Google Drive with specific people or create a shareable link. You can set different permission levels.",
   inputSchema: z.object({
-    fileName: z.string().describe("Name or ID of the file/folder to share"),
+    fileName: z.string().optional().describe("Name of the file/folder to share"),
+    fileId: z.string().optional().describe("ID of the file/folder to share"),
     shareWith: z.string().optional().describe("Email address to share with (optional, creates public link if not specified)"),
+    email: z.string().optional().describe("Email address to share with (alternative parameter name)"),
     permission: z.enum(["view", "edit", "comment"]).optional().describe("Permission level (default: view)"),
+    role: z.enum(["reader", "writer", "commenter"]).optional().describe("Permission role (alternative parameter name)"),
     shareType: z.enum(["email", "link", "public"]).optional().describe("How to share: email (specific person), link (anyone with link), public (anyone can find)")
   }),
   outputSchema: z.object({
@@ -26,32 +29,48 @@ export const shareFileTool = createTool({
     }
 
     const fileName = input.context?.fileName;
-    const shareWith = input.context?.shareWith;
-    const permission = input.context?.permission || "view";
+    const fileId = input.context?.fileId;
+    const shareWith = input.context?.shareWith || input.context?.email;
+    const permission = input.context?.permission || (input.context?.role === "writer" ? "edit" : 
+                      input.context?.role === "commenter" ? "comment" : "view");
     const shareType = input.context?.shareType || (shareWith ? "email" : "link");
 
-    if (!fileName) {
-      throw new Error("File name is required");
+    // We need either fileName or fileId
+    if (!fileName && !fileId) {
+      throw new Error("Either file name or file ID is required");
     }
 
     try {
-      // Find the file/folder
-      const searchResponse = await clients.drive.files.list({
-        q: `name='${fileName}' and trashed=false`,
-        fields: 'files(id, name, mimeType, webViewLink)'
-      });
+      let file;
+      let fileIdToUse;
 
-      if (!searchResponse.data.files || searchResponse.data.files.length === 0) {
-        return {
-          success: false,
-          fileName,
-          permission,
-          message: `❌ File or folder '${fileName}' not found.`
-        };
+      // If we have fileId, use it directly, otherwise search by name
+      if (fileId) {
+        const fileResponse = await clients.drive.files.get({
+          fileId: fileId,
+          fields: 'id, name, mimeType, webViewLink'
+        });
+        file = fileResponse.data;
+        fileIdToUse = fileId;
+      } else {
+        // Find the file/folder by name
+        const searchResponse = await clients.drive.files.list({
+          q: `name='${fileName}' and trashed=false`,
+          fields: 'files(id, name, mimeType, webViewLink)'
+        });
+
+        if (!searchResponse.data.files || searchResponse.data.files.length === 0) {
+          return {
+            success: false,
+            fileName: fileName || fileId || "Unknown",
+            permission,
+            message: `❌ File or folder '${fileName}' not found.`
+          };
+        }
+
+        file = searchResponse.data.files[0];
+        fileIdToUse = file.id!;
       }
-
-      const file = searchResponse.data.files[0];
-      const fileId = file.id!;
 
       // Set up permission based on share type
       let permissionResource: any = {
@@ -64,7 +83,7 @@ export const shareFileTool = createTool({
         permissionResource.emailAddress = shareWith;
         
         await clients.drive.permissions.create({
-          fileId: fileId,
+          fileId: fileIdToUse,
           requestBody: permissionResource,
           sendNotificationEmail: true
         });
@@ -82,7 +101,7 @@ export const shareFileTool = createTool({
         permissionResource.type = "anyone";
         
         await clients.drive.permissions.create({
-          fileId: fileId,
+          fileId: fileIdToUse,
           requestBody: permissionResource
         });
 
@@ -100,7 +119,7 @@ export const shareFileTool = createTool({
         permissionResource.allowFileDiscovery = true;
         
         await clients.drive.permissions.create({
-          fileId: fileId,
+          fileId: fileIdToUse,
           requestBody: permissionResource
         });
 
@@ -124,9 +143,9 @@ export const shareFileTool = createTool({
       console.error("File sharing error:", error);
       return {
         success: false,
-        fileName,
+        fileName: fileName || fileId || "Unknown",
         permission,
-        message: `❌ Failed to share '${fileName}'. Please try again.`
+        message: `❌ Failed to share '${fileName || fileId}'. Please try again.`
       };
     }
   }
