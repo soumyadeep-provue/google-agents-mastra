@@ -28,7 +28,7 @@
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.0.15",
-    "mastra": "^0.10.13",
+    "mastra": "^0.10.20",
     "typescript": "^5.8.3"
   }
 }
