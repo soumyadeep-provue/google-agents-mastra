@@ -55,6 +55,10 @@ export const mapsTool = createTool({
   - Useful for location-based searches and services
   - Example: { action: "getCurrentLocation" }
 
+- **"getCurrentPlaceName"**: Get the formatted place name of the current location
+  - Returns a single place string (e.g., formatted address/plus code area)
+  - Example: { action: "getCurrentPlaceName" }
+
 ## BEST PRACTICES
 
 ### Search Optimization
@@ -87,7 +91,7 @@ export const mapsTool = createTool({
 - Use place IDs for consistent location references
 - Handle offline scenarios gracefully`,
   inputSchema: z.object({
-    action: z.enum(["textSearch", "directions", "nearbySearch", "geocoding", "reverseGeocoding", "distanceMatrix", "getCurrentLocation"]).describe("The action to perform"),
+    action: z.enum(["textSearch", "directions", "nearbySearch", "geocoding", "reverseGeocoding", "distanceMatrix", "getCurrentLocation", "getCurrentPlaceName"]).describe("The action to perform"),
     
     // Text search / Nearby search
     query: z.string().optional().describe("Search query for places (required for textSearch action, e.g., 'restaurants in New York')"),
@@ -115,12 +119,15 @@ export const mapsTool = createTool({
     highAccuracy: z.boolean().optional().describe("Enable high accuracy GPS (optional for getCurrentLocation action)"),
     ipAddress: z.string().optional().describe("IP address for location detection (optional for getCurrentLocation action)"),
     fallbackLocation: z.string().optional().describe("Fallback location if GPS not available (optional for getCurrentLocation action)"),
+    currentLatitude: z.number().optional().describe("Client-provided latitude (optional for getCurrentLocation action)"),
+    currentLongitude: z.number().optional().describe("Client-provided longitude (optional for getCurrentLocation action)"),
     
     // Distance matrix
     origins: z.array(z.string()).optional().describe("Array of origin locations (required for distanceMatrix action)"),
     destinations: z.array(z.string()).optional().describe("Array of destination locations (required for distanceMatrix action)")
   }),
-  execute: async ({ context }) => {
+  execute: async ({ context }, options) => {
+    const execOpts = { runtimeContext: undefined } as any;
     switch (context.action) {
       case "textSearch":
         return await textSearchTool.execute({
@@ -128,8 +135,9 @@ export const mapsTool = createTool({
             query: context.query,
             location: context.location,
             radius: context.radius
-          }
-        });
+          },
+          ...execOpts
+        }, options);
         
       case "directions":
         return await getDirectionsTool.execute({
@@ -138,8 +146,9 @@ export const mapsTool = createTool({
             destination: context.destination,
             mode: context.mode,
             waypoints: context.waypoints
-          }
-        });
+          },
+          ...execOpts
+        }, options);
         
       case "nearbySearch":
         return await nearbySearchTool.execute({
@@ -148,23 +157,27 @@ export const mapsTool = createTool({
             radius: context.radius,
             type: context.type,
             keyword: context.keyword
-          }
-        });
+          },
+          ...execOpts
+        }, options);
         
       case "geocoding":
         return await geocodingTool.execute({
           context: {
             address: context.address
-          }
-        });
+          },
+          ...execOpts
+        }, options);
         
       case "reverseGeocoding":
         return await geocodingTool.execute({
           context: {
-            latitude: context.latitude,
-            longitude: context.longitude
-          }
-        });
+            coordinates: typeof context.latitude === 'number' && typeof context.longitude === 'number'
+              ? `${context.latitude},${context.longitude}`
+              : undefined
+          },
+          ...execOpts
+        }, options);
         
       case "distanceMatrix":
         return await distanceMatrixTool.execute({
@@ -172,17 +185,56 @@ export const mapsTool = createTool({
             origins: context.origins,
             destinations: context.destinations,
             mode: context.mode
-          }
-        });
+          },
+          ...execOpts
+        }, options);
         
       case "getCurrentLocation":
         return await getCurrentLocationTool.execute({
           context: {
             highAccuracy: context.highAccuracy,
             ipAddress: context.ipAddress,
-            fallbackLocation: context.fallbackLocation
-          }
-        });
+            fallbackLocation: context.fallbackLocation,
+            latitude: context.currentLatitude,
+            longitude: context.currentLongitude
+          },
+          ...execOpts
+        }, options);
+
+      case "getCurrentPlaceName": {
+        const loc = await getCurrentLocationTool.execute({
+          context: {
+            highAccuracy: context.highAccuracy,
+            ipAddress: context.ipAddress,
+            fallbackLocation: context.fallbackLocation,
+            latitude: context.currentLatitude,
+            longitude: context.currentLongitude
+          },
+          ...execOpts
+        }, options);
+
+        if (!loc?.success || !loc?.location) {
+          return {
+            success: false,
+            place: "",
+            message: loc?.message || "❌ Could not determine current place"
+          };
+        }
+
+        if (loc.location.address) {
+          return {
+            success: true,
+            place: loc.location.address,
+            message: `✅ ${loc.location.address}`
+          };
+        }
+
+        return {
+          success: true,
+          place: `${loc.location.latitude},${loc.location.longitude}`,
+          message: "✅ Coordinates returned (no address found)"
+        };
+      }
         
       default:
         throw new Error(`Unknown action: ${(context as any).action}`);
