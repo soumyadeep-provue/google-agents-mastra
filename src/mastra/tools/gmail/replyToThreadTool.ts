@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { setupGoogleClients } from "../auth/auth";
+import { humanApprovalTool } from "../auth/humanApprovalTool";
 
 export const replyToThreadTool = createTool({
   id: "replyToThread",
@@ -42,89 +43,116 @@ export const replyToThreadTool = createTool({
       throw new Error("Must provide either threadId, messageId, or emailSubject to identify the conversation to reply to");
     }
 
-    try {
-      let targetThreadId = threadId;
-      let originalMessage: any = null;
+    // HUMAN APPROVAL REQUIRED - Get thread info first for preview
+    let targetThreadId = threadId;
+    let originalMessage: any = null;
 
-      // Find the thread/message if not provided directly
-      if (!targetThreadId) {
-        if (messageId) {
-          // Get message to find its thread
-          const messageResponse = await clients.gmail.users.messages.get({
-            userId: 'me',
-            id: messageId,
-            format: 'full'
-          });
-          
-          targetThreadId = messageResponse.data.threadId!;
-          originalMessage = messageResponse.data;
-        } else if (emailSubject) {
-          // Search for emails with this subject
-          const searchResponse = await clients.gmail.users.messages.list({
-            userId: 'me',
-            q: `subject:"${emailSubject}"`,
-            maxResults: 1
-          });
-
-          if (!searchResponse.data.messages || searchResponse.data.messages.length === 0) {
-            return {
-              success: false,
-              subject: emailSubject,
-              recipients: "",
-              message: `❌ No email found with subject: "${emailSubject}"`
-            };
-          }
-
-          const messageResponse = await clients.gmail.users.messages.get({
-            userId: 'me',
-            id: searchResponse.data.messages[0].id!,
-            format: 'full'
-          });
-
-          targetThreadId = messageResponse.data.threadId!;
-          originalMessage = messageResponse.data;
-        }
-      }
-
-      // Get the latest message in the thread if we don't have original message
-      if (!originalMessage && targetThreadId) {
-        const threadResponse = await clients.gmail.users.threads.get({
+    // Find the thread/message if not provided directly
+    if (!targetThreadId) {
+      if (messageId) {
+        // Get message to find its thread
+        const messageResponse = await clients.gmail.users.messages.get({
           userId: 'me',
-          id: targetThreadId,
+          id: messageId,
+          format: 'full'
+        });
+        
+        targetThreadId = messageResponse.data.threadId!;
+        originalMessage = messageResponse.data;
+      } else if (emailSubject) {
+        // Search for emails with this subject
+        const searchResponse = await clients.gmail.users.messages.list({
+          userId: 'me',
+          q: `subject:"${emailSubject}"`,
+          maxResults: 1
+        });
+
+        if (!searchResponse.data.messages || searchResponse.data.messages.length === 0) {
+          return {
+            success: false,
+            subject: emailSubject,
+            recipients: "",
+            message: `❌ No email found with subject: "${emailSubject}"`
+          };
+        }
+
+        const messageResponse = await clients.gmail.users.messages.get({
+          userId: 'me',
+          id: searchResponse.data.messages[0].id!,
           format: 'full'
         });
 
-        // Get the latest message from the thread
-        const messages = threadResponse.data.messages || [];
-        originalMessage = messages[messages.length - 1];
+        targetThreadId = messageResponse.data.threadId!;
+        originalMessage = messageResponse.data;
       }
+    }
 
-      if (!originalMessage) {
-        throw new Error("Could not find the original message to reply to");
-      }
+    // Get the latest message in the thread if we don't have original message
+    if (!originalMessage && targetThreadId) {
+      const threadResponse = await clients.gmail.users.threads.get({
+        userId: 'me',
+        id: targetThreadId,
+        format: 'full'
+      });
 
-      // Parse headers from original message
-      const headers = originalMessage.payload?.headers || [];
-      const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+      // Get the latest message from the thread
+      const messages = threadResponse.data.messages || [];
+      originalMessage = messages[messages.length - 1];
+    }
 
-      const originalSubject = getHeader('Subject');
-      const originalFrom = getHeader('From');
-      const originalTo = getHeader('To');
-      const originalCc = getHeader('Cc');
+    if (!originalMessage) {
+      throw new Error("Could not find the original message to reply to");
+    }
+
+    // Parse headers from original message for preview
+    const headers = originalMessage.payload?.headers || [];
+    const getHeader = (name: string) => headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+
+    const originalSubject = getHeader('Subject');
+    const originalFrom = getHeader('From');
+    const originalTo = getHeader('To');
+    const originalCc = getHeader('Cc');
+
+    // Construct reply details for preview
+    const replySubject = originalSubject.startsWith('Re: ') ? originalSubject : `Re: ${originalSubject}`;
+    let replyTo = originalFrom;
+    let replyCc = '';
+    
+    if (replyToAll) {
+      const allRecipients = [originalTo, originalCc].filter(Boolean).join(', ');
+      replyCc = allRecipients;
+    }
+
+    // Create email preview
+    const emailPreview = `Subject: ${replySubject}
+To: ${replyTo}${replyCc ? `\nCc: ${replyCc}` : ''}
+
+${replyBody}`;
+
+    // Request human approval
+    const approvalResult = await humanApprovalTool.execute({
+      context: {
+        approvalType: 'content_confirmation',
+        action: 'Reply to Email Thread',
+        details: `Replying to thread: ${originalSubject}\nReply All: ${replyToAll ? 'Yes' : 'No'}\nOriginal sender: ${originalFrom}`,
+        contentPreview: emailPreview,
+        severity: 'high'
+      },
+      runtimeContext: input.runtimeContext
+    });
+
+    if (!approvalResult.approved) {
+      return {
+        success: false,
+        subject: replySubject,
+        recipients: `${replyTo}${replyCc ? ` (+ ${replyCc})` : ''}`,
+        message: `❌ Reply cancelled: ${approvalResult.reason}`
+      };
+    }
+
+    try {
+      // Continue with original logic
       const originalMessageId = getHeader('Message-ID');
-
-      // Construct reply headers
-      const replySubject = originalSubject.startsWith('Re: ') ? originalSubject : `Re: ${originalSubject}`;
-      
-      // Determine recipients
-      let replyTo = originalFrom;
-      let replyCc = '';
-      
-      if (replyToAll) {
-        // Include original recipients, but exclude our own email
-        const allRecipients = [originalTo, originalCc].filter(Boolean).join(', ');
-        replyCc = allRecipients;
-      }
 
       // Construct the reply email
       const replyHeaders = [

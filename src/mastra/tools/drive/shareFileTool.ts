@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { setupGoogleClients } from "../auth/auth";
+import { humanApprovalTool } from "../auth/humanApprovalTool";
 
 export const shareFileTool = createTool({
   id: "shareFile",
@@ -72,6 +73,36 @@ export const shareFileTool = createTool({
         fileIdToUse = file.id!;
       }
 
+      // Create sharing preview data
+      const sharingPreview = {
+        fileName: file.name!,
+        shareWith: shareWith || 'Anyone with link',
+        permission: permission,
+        shareType: shareType
+      };
+
+      // Request human approval
+      const approvalResult = await humanApprovalTool.execute({
+        context: {
+          approvalType: 'execution_approval',
+          action: 'Share File in Google Drive',
+          details: `File: ${file.name}\nShare with: ${shareWith || 'Anyone with link'}\nPermission: ${permission}\nShare type: ${shareType}`,
+          contentPreview: JSON.stringify(sharingPreview, null, 2),
+          severity: 'high'
+        },
+        runtimeContext: input.runtimeContext
+      });
+
+      if (!approvalResult.approved) {
+        return {
+          success: false,
+          fileName: file.name!,
+          permission,
+          message: `❌ File sharing cancelled: ${approvalResult.reason}`
+        };
+      }
+
+      // Continue with original sharing logic
       // Set up permission based on share type
       let permissionResource: any = {
         role: permission === "edit" ? "writer" : permission === "comment" ? "commenter" : "reader"

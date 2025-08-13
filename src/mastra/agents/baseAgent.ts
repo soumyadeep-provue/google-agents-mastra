@@ -4,9 +4,11 @@ import { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 import { loginTool } from "../tools/auth/loginTool";
 import { logoutTool } from "../tools/auth/logoutTool";
+import { humanApprovalTool } from "../tools/auth/humanApprovalTool";
 import { docsTool } from "../tools/docs/docsTool";
 import { driveTool } from "../tools/drive/driveTool";
 import { gmailTool } from "../tools/gmail/gmailTool";
+
 import { sheetsTool } from "../tools/sheets/sheetsTool";
 import { mapsTool } from "../tools/maps/mapsTool";
 
@@ -18,13 +20,23 @@ export const baseAgent = new Agent({
 Always start by checking authentication status. If any tool fails with authentication error, use loginTool immediately to establish proper access.
 
 ## AVAILABLE TOOLS
-You have access to five unified tools, each with detailed usage instructions in their descriptions:
+You have access to these unified tools, each with detailed usage instructions in their descriptions:
 - **docsTool**: Google Docs operations (create, edit, search documents)
 - **driveTool**: Google Drive file management (upload, organize, share files)
 - **gmailTool**: Email operations (send, receive, manage emails)
 - **sheetsTool**: Google Sheets operations (create, edit spreadsheets)
 - **mapsTool**: Location services (search places, directions, geocoding)
 - **loginTool / logoutTool**: Authentication management
+- **humanApprovalTool**: Human approval system for sensitive operations - CHECK TOOL DESCRIPTION for mandatory approval requirements
+
+## HUMAN APPROVAL SYSTEM
+**CRITICAL**: Many operations require human approval for security and safety. The humanApprovalTool contains comprehensive instructions on:
+- Which operations require approval (emails, file sharing, document modifications, etc.)
+- How to request approval with proper parameters
+- When to use different approval types and severity levels
+- How to handle approval responses
+
+**Always consult the humanApprovalTool description** for detailed approval requirements before performing sensitive operations.
 
 ## WORKFLOW COORDINATION
 
@@ -40,12 +52,13 @@ You excel at combining tools to create complete solutions:
 2. **Gather Context**: Retrieve current content/data before making changes  
 3. **Logical Sequencing**: Plan operations in dependency order
 4. **Share Results**: Provide links and access information for collaboration
+5. **Approval Check**: Consult humanApprovalTool for sensitive operations
 
 ### Tool Selection Strategy
 - **Text Documents & Reports**: Use docsTool
 - **Data & Calculations**: Use sheetsTool  
 - **File Storage & Sharing**: Use driveTool
-- **Communication**: Use gmailTool
+- **Communication**: Use gmailTool (with required approval)
 - **Location Information**: Use mapsTool
 
 ## BEST PRACTICES
@@ -64,7 +77,7 @@ You excel at combining tools to create complete solutions:
 
 ### Security & Collaboration
 - Use appropriate sharing permissions (reader/writer/commenter)
-- Confirm sensitive operations before execution
+- Follow humanApprovalTool requirements for sensitive operations
 - Suggest proper organizational practices
 - Respect privacy considerations
 
@@ -87,6 +100,7 @@ Your strength is in orchestrating Google Services to create seamless, profession
   tools: {
     loginTool,
     logoutTool,
+    humanApprovalTool,
     docsTool,
     driveTool,
     gmailTool,
@@ -95,11 +109,11 @@ Your strength is in orchestrating Google Services to create seamless, profession
   },
 
   defaultGenerateOptions: {
-    maxSteps: 1000, 
+    maxSteps: 100, 
   },
 
   defaultStreamOptions: {
-    maxSteps: 1000, 
+    maxSteps: 100, 
   },
 
   memory: new Memory({
@@ -111,7 +125,7 @@ Your strength is in orchestrating Google Services to create seamless, profession
       workingMemory: {
         enabled: true,
         template: `# Google Services Agent Session
-- **Available Tools**: docsTool, driveTool, gmailTool, sheetsTool, mapsTool, loginTool, logoutTool
+- **Available Tools**: docsTool, driveTool, gmailTool, sheetsTool, mapsTool, loginTool, logoutTool, humanApprovalTool
 - **Current Task**: [What the user is trying to accomplish]
 - **Authentication Status**: [OAuth status for Google services]
 - **Active Resources**: [Documents, files, emails currently being worked on]
@@ -119,6 +133,8 @@ Your strength is in orchestrating Google Services to create seamless, profession
 - **User Intent**: [Primary goal analysis]
 - **Task Progress**: [Current step in multi-step processes]
 - **Pending Actions**: [Operations waiting for completion or user input]
+- **Approval Status**: [Human approval requests and their status]
+- **Security Context**: [Sensitivity level of current operations]
 `
       },
       threads: {

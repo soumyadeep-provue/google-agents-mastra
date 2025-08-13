@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { setupGoogleClients } from "../auth/auth";
+import { humanApprovalTool } from "../auth/humanApprovalTool";
 
 export const insertTextTool = createTool({
   id: "insertText",
@@ -27,6 +28,37 @@ export const insertTextTool = createTool({
     
     if (!documentId || !text) {
       throw new Error("Document ID and text are required");
+    }
+
+    // Get document info for approval preview
+    let documentTitle = "Unknown Document";
+    try {
+      const docResponse = await clients.docs.documents.get({
+        documentId: documentId
+      });
+      documentTitle = docResponse.data.title || "Untitled Document";
+    } catch (error) {
+      console.log("Could not get document title:", error);
+    }
+
+    // Request human approval
+    const approvalResult = await humanApprovalTool.execute({
+      context: {
+        approvalType: 'content_confirmation',
+        action: 'Insert Text into Google Document',
+        details: `Document: ${documentTitle}\nDocument ID: ${documentId}\nInsertion position: ${index !== undefined ? `Index ${index}` : 'End of document'}`,
+        contentPreview: `Text to insert:\n\n${text}`,
+        severity: 'medium'
+      },
+      runtimeContext: input.runtimeContext
+    });
+
+    if (!approvalResult.approved) {
+      return {
+        success: false,
+        documentId: documentId,
+        message: `❌ Text insertion cancelled: ${approvalResult.reason}`
+      };
     }
 
     try {
